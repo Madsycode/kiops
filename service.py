@@ -1,10 +1,9 @@
 import os
+import time
 import graphviz
+import requests
 import streamlit as st
 from dotenv import load_dotenv
-
-# Load Env
-load_dotenv()
 
 # Local Imports
 from models import RichMLAppProfile
@@ -12,16 +11,14 @@ from styles import inject_custom_css
 from containerize import DockerExecutionEngine
 from generative import query_ai_json, query_ai_text
 
+# Load Env
+load_dotenv()
+
 # ==========================================
 # 1. SETUP & STATE
 # ==========================================
 
-st.set_page_config(
-    layout="wide",
-    page_icon="📡",
-    page_title="6G MLOps Platform",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(layout="wide", page_icon="📡", page_title="6G MLOps Platform", initial_sidebar_state="expanded")
 
 # Apply CSS
 inject_custom_css()
@@ -38,14 +35,14 @@ with st.sidebar:
     st.markdown(
         """<div style="text-align: center; margin-bottom: 20px;">
             <div style="font-size: 3rem;">📡</div>
-            <h2 style="margin:0;">Network Ops</h2>
-            <div style="font-size: 0.8rem; color: #666;">GenAI Orchestrator v2.0</div>
+            <h2 style="margin:0;">6G MLOps Platform</h2>
+            <div style="font-size: 0.8rem; color: #666;">Agentic MLOps Executive v1.0</div>
         </div>""",
         unsafe_allow_html=True
     ) 
     st.divider()
     
-    provider = st.radio("AI Provider", ["Google Gemini", "Ollama (Local)"])
+    provider = st.radio("Service Provider", ["Google Gemini", "Ollama (Local)"])
     api_key, base_url, model_choice = None, None, None
     
     if provider == "Google Gemini":
@@ -53,7 +50,7 @@ with st.sidebar:
         model_choice = st.selectbox("Model", ["gemini-3-flash-preview", "gemini-3-pro-preview"])
     else:
         base_url = st.text_input("Ollama URL", "http://localhost:11434/v1")
-        model_choice = st.selectbox("Model", ["llama3.2:1b", "mistral", "qwen2.5:0.5b"])
+        model_choice = st.selectbox("Model Name", ["llama3.2:1b", "mistral", "qwen2.5:0.5b"])
         st.info("⚠️ Ensure Ollama is running locally.")
     
     st.divider()
@@ -70,9 +67,9 @@ with st.sidebar:
 # ==========================================
 
 tab1, tab2, tab3 = st.tabs([
-    "🧩 Onboarding",
-    "🏭 Synthesis Factory",
-    "💬 Context Chat",
+    "🧩 Descriptor",
+    "🏭 Factory",
+    "💬 Chat",
 ])
 
 # --- TAB 1: ONBOARDING ---
@@ -235,7 +232,7 @@ with tab2:
         if dex.is_available():
             with st.spinner("Deploying..."):
                 prompt_serve = (
-                    "Write a 'serve.py' script. Load model from '/data/model.pkl'. "
+                    "Output ONLY (NO extra chracters, comments, etc.) a 'serve.py' script. Load model from '/data/model.pkl'. "
                     "Infinite loop checking for input. Print 'Serving prediction...'. "
                     "Sleep 1s between checks. Output ONLY code."
                 )
@@ -253,10 +250,26 @@ with tab2:
                     st.session_state.deploy_container = container
                     st.success(f"Deployed to **{profile.inference.resource.container}**")
 
+    # --- INTERACTIVE TESTING ---
     if 'deploy_container' in st.session_state:
-        st.caption("Live Inference Logs (Last 10 lines):")
-        logs = dex.get_logs(st.session_state.deploy_container)
-        st.code("\n".join(logs.splitlines()[-10:]))
+        st.divider()
+        st.markdown("#### 🧪 Live Inference Lab")
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            st.caption("Container Logs")
+            st.code(dex.get_logs(st.session_state.deploy_container), language="text")
+        
+        with c2:
+            st.caption("Test Client")
+            if st.button("⚡ Send Test Request"):
+                try:
+                    # Simple dummy payload
+                    payload = {"input": [0.5, 0.1, 0.9]} 
+                    res = requests.post("http://localhost:5000/predict", json=payload, timeout=2)
+                    st.json(res.json())
+                except Exception as e:
+                    st.error(f"Connection Failed: {e}")
+                    st.info("Wait a few seconds for Flask to start...")
 
 # --- TAB 3: CHAT ---
 with tab3:
