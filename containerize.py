@@ -7,7 +7,7 @@ class DockerExecutionEngine:
     def __init__(self):
         self._fix_wsl_docker_config()
         self.context_path = os.path.abspath("context")
-        self.data_path = os.path.abspath("data") # Shared volume folder
+        self.data_path = os.path.abspath("data") 
         
         # Create directories
         for p in [self.context_path, self.data_path]:

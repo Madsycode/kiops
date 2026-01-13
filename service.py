@@ -1,6 +1,4 @@
 import os
-import time
-import uuid
 import graphviz
 import streamlit as st
 from dotenv import load_dotenv
@@ -74,16 +72,18 @@ with tab1:
     col_input, col_view = st.columns(2)
     with col_input:
         st.subheader("Intent Definition")
-        intent = st.text_area("Requirement", height=150, value="Generate a 'Network Load Predictor' app.")
-            #value="I need a Beamforming Optimizer that runs directly on Base Stations.  It needs to read channel statistics every 10ms and adjust the precoding matrix.  Latency is critical (must be under 5ms). It needs to retrain every night using a central parameter server.  This is a core network function, so it needs privileged access.")
-        if st.button("Generate Profile", type="primary"):
+        intent = st.text_area("Requirement", height=150, value="Create a 'Network Load Predictor' app. It needs to read channel statistics every 10ms and adjust the precoding matrix. Latency is critical (must be under 5ms). It needs to retrain every night using a central parameter server.  This is a core network function, so it needs privileged access.")            
+        if st.button("Generate BOM", type="primary"):
             with st.spinner("Compiling BOM..."):
-                data = query_ai_json(provider, api_key, base_url, model_choice, intent)
+                data = query_ai_json(provider, api_key, base_url, model_choice, intent)                
                 if isinstance(data, dict) and "error" not in data:
                     st.session_state.profile = RichMLAppProfile(**data)
+                    # show descriptor json content
+                    with st.expander("Raw Descriptor (JSON)", expanded=True):
+                        st.json(st.session_state.profile.model_dump())
                     st.success("Profile Generated!")
                 else:
-                    st.error(f"Generation Failed: {data}")
+                    st.error(f"Generation Failed: {data}")          
 
     with col_view:
         st.subheader("Architecture Preview")
@@ -92,22 +92,7 @@ with tab1:
 
         if st.session_state.profile:
             profile = st.session_state.profile
-
-            # Default values
-            loc, reason, pill = "Core Cloud", "Latency tolerant", "pill-green"            
-
-            # Check deadline
-            deadline = profile.inference_resources.deadline
-            if deadline and "ms" in deadline:
-                val = int("".join(filter(str.isdigit, deadline)))
-                if val < 5:
-                    loc, reason, pill = "Far Edge (Base Station)", "Ultra-low latency", "pill-red"
-                elif val < 20:
-                    loc, reason, pill = "Edge Cloud", "Latency sensitive", "pill-blue"
-            
-            st.markdown(f"""<p><strong>Placement:</strong> {loc}</p>
-            <span class="pill {pill}">{reason}</span>""", unsafe_allow_html=True)
-
+          
             g = graphviz.Digraph()
             g.attr(rankdir="LR", fontname="Inter")
             g.node("App", profile.name, shape="box", style="rounded,filled", fillcolor="#e0f2fe")
@@ -120,15 +105,12 @@ with tab1:
                 g.node(a.name, a.name, shape="component")
                 g.edge("App", a.name)
 
-            if profile.training_config.required:
+            if profile.training.required:
                 g.node('Train', label="Training Loop", fillcolor='#FFF9C4', style='dashed,filled')
                 g.edge('App', 'Train', style='dashed')
                 g.edge('Train', 'App', style='dashed')
 
-            st.graphviz_chart(g, use_container_width=True)
-
-            with st.expander("Raw Descriptor (JSON)", expanded=True):
-                st.json(profile.model_dump())
+            st.graphviz_chart(g, use_container_width=True)            
         else:
             st.info("Generate an app to preview architecture.")
 
@@ -159,9 +141,9 @@ with tab2:
     # Pipeline Visualization
     col_pipe_1, col_pipe_2 = st.columns(2)
     with col_pipe_1:
-        st.markdown(f"**🎯 Training Target:** `{profile.training_target.target_id}` ({profile.training_target.role})")
+        st.markdown(f"**🎯 Training Container:** `{profile.training.resource.container}`")
     with col_pipe_2:
-        st.markdown(f"**🚀 Deployment Target:** `{profile.deployment_target.target_id}` ({profile.deployment_target.role})")
+        st.markdown(f"**🚀 Deployment Container:** `{profile.inference.resource.container}`")
     
     st.divider()
 
@@ -178,18 +160,20 @@ with tab2:
             with st.spinner("AI is coding..."):
                 # 1. Python Script
                 prompt_code = (
-                    f"Output ONLY a Python script (no extra code or comments) 'train.py' for app '{profile.name}'. "
+                    f"Output ONLY (no extra code or comments) a Python script 'train.py' for app '{profile.name}'. "
                     f"Logic: {profile.description}. "
-                    "MUST DO: 1. Generate synthetic data. 2. Train a dummy sklearn model. "
-                    "3. Save the model to '/data/model.pkl' (CRITICAL). "
-                    "4. Print 'Step X/X' logs."
+                    "MUST DO: 1. Generate synthetic data.\n"
+                    "MUST DO: 2. Train a dummy sklearn model.\n"
+                    "MUST DO: 3. Save the 'train.py' script to '/context/train.py' (CRITICAL).\n"
+                    "MUST DO: 4. Save the model to '/data/model.pkl' (CRITICAL).\n"
+                    "MUST DO: 5. Print 'Step X/X' logs."
                 )
                 st.session_state.train_script = query_ai_text(provider, api_key, base_url, model_choice, prompt_code)
                 
                 # 2. Dockerfile
                 prompt_docker = (
-                    f"Output ONLY a Dockerfile (no extra code or comments) to run this python script. "
-                    "Base image: python:3.11-slim. "
+                    f"Output ONLY (no extra code or comments) a Dockerfile to run the 'train.py' python script. "
+                    "Base image: python:3.11-slim. no requirements.txt file allowed. "
                     "Install all dependencies (scikit-learn, joblib, pandas, etc). "
                     "WORKDIR /app."
                 )
@@ -224,7 +208,7 @@ with tab2:
                 
                 # Run
                 container = dex.run_container("kiops-custom:latest", st.session_state.train_script, 
-                "train.py", f"kiops-train-{profile.training_target.target_id}")
+                "train.py", f"kiops-train-{profile.training.resource.container}")
 
                 if container:
                     st.session_state.train_container = container
@@ -243,8 +227,8 @@ with tab2:
     # ==========================================
     st.markdown("### 🚀 Phase 2: Deploy to Target")
     
-    if st.button("Promote Model to Deployment Node"):
-        with st.spinner(f"Deploying to {profile.deployment_target.target_id}..."):
+    if st.button("Deploy Model"):
+        with st.spinner(f"Deploying to {profile.inference.resource.container}..."):
             
             # 1. Generate Inference Script
             prompt_serve = (
@@ -259,11 +243,11 @@ with tab2:
             # 2. Run Serving Container (Mocking a remote node)
             # We reuse the same image for simplicity, but use the new script
             container = dex.run_container("kiops-custom:latest", serve_script, "serve.py", 
-                f"kiops-deploy-{profile.deployment_target.target_id}", mode="serving")
+                f"kiops-deploy-{profile.inference.resource.container}", mode="serving")
             
             if container:
                 st.session_state.deploy_container = container
-                st.success(f"Model Deployed to **{profile.deployment_target.ip_address}** (Simulated)")
+                st.success(f"Model Deployed to **{profile.inference.resource.container}** (Simulated)")
 
     # Deployment Logs
     if 'deploy_container' in st.session_state:

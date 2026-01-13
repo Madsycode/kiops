@@ -8,15 +8,17 @@ def query_ai_json(provider, api_key, base_url, model_name, prompt):
         if provider == "Google Gemini":
             genai.configure(api_key=api_key)            
             model = genai.GenerativeModel(model_name,
-                generation_config={
+                generation_config = {
                     "response_mime_type": "application/json", 
                     "response_schema": RichMLAppProfile
                 }
             )
 
             full_prompt = (
-                "You are the KI Ops Executive Onboarding Agent for a 6G Network. "
-                "Translate the following user intent into a formal Rich-ML-App Descriptor.\n\n"
+                "You are an MLOps executive agent for a 6G Network. "
+                "Translate the following user intent into a formal Rich-ML-App Descriptor. "
+                "Provide sensible default values for fields where appropriate. Ensure the output "
+                "is valid JSON. Do not include any surrounding text or explanations—only the JSON object."
                 f"User Intent: {prompt}"
             )
 
@@ -25,7 +27,13 @@ def query_ai_json(provider, api_key, base_url, model_name, prompt):
         else:
             client = OpenAI(base_url=base_url, api_key="ollama")
             schema = json.dumps(RichMLAppProfile.model_json_schema(), indent=2)
-            system = f"Return ONLY valid JSON (NO additional comments, characters, descriptors, etc.) strictly adhering to: {schema}"
+
+            system = (
+                f"Return ONLY valid JSON (NO additional comments, characters, descriptors, etc.) strictly adhering to: {schema}"
+                "Provide sensible default values for fields where appropriate. Ensure the output is valid JSON. "
+                "Do not include any surrounding text or explanations—only the JSON object."
+            )
+
             response = client.chat.completions.create(
                 model=model_name,
                 messages=[
