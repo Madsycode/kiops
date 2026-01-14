@@ -246,7 +246,7 @@ with tab2:
                 # 1. Generate Script
                 prompt_serve = (
                     "Output ONLY (NO extra chracters, comments, etc.) a 'serve.py' script using Flask. "
-                    f"1. Load model from '/data/{descriptor.inference.}.pkl'. "
+                    f"1. Load model from '/data/model.pkl'. "
                     "2. Create POST /predict. "
                     "3. CRITICAL: Extract input list from JSON key 'input'. Example: `features = request.json['input']`. "
                     "4. CRITICAL: Convert to 2D array for sklearn: `prediction = model.predict([features])`. "
