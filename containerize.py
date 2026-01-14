@@ -1,8 +1,8 @@
-import docker
 import os
-import json
 import io
-from docker.errors import BuildError, APIError, NotFound
+import json
+import docker
+from docker.errors import NotFound
 
 class DockerExecutionEngine:
     def __init__(self):
@@ -94,6 +94,23 @@ class DockerExecutionEngine:
         except Exception as e:
             print(f"Run Error: {e}")
             return None
+        
+    def copy_model(self, source_container_name, source_path, destination_container_name, destination_dir):
+        """Copies files between containers using tar streams."""
+        try:
+            src = self.client.containers.get(source_container_name)
+            dst = self.client.containers.get(destination_container_name)
+            
+            # 1. Get file as tar stream
+            print(f"Copying {source_path} from {source_container_name}...")
+            bits, stat = src.get_archive(source_path)
+            
+            # 2. Put tar stream into destination
+            # Note: put_archive takes the directory where the file should be unpacked
+            dst.put_archive(path=destination_dir, data=bits)
+            return True
+        except Exception as e:
+            return f"Copy Error: {e}"
         
     def get_logs(self, container):
         try:

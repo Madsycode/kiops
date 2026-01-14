@@ -1,25 +1,44 @@
-import json
 import re
+import json
 from openai import OpenAI
 import google.generativeai as genai
 from models import RichMLAppProfile
 
 def _clean_response(text):
     """Helper to strip markdown code blocks from LLM response."""
-    # Remove ```json and ``` or just ```
+    text = re.sub(r'^```python\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'^```json\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'^```\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'```$', '', text, flags=re.MULTILINE)
     return text.strip()
 
+def _unwrap_json(data):
+    """
+    Fixes common LLM issue where the JSON is wrapped in a root key 
+    like {'RichMLAppProfile': {...}} or {'app': {...}}.
+    """
+    if isinstance(data, dict):
+        # If it's a single key containing a dict, returns the inner dict
+        # provided the inner dict looks like a profile (has 'name' and 'observables')
+        if len(data) == 1:
+            key = next(iter(data))
+            val = data[key]
+            if isinstance(val, dict) and "name" in val:
+                return val
+    return data
+
 def query_ai_json(provider, api_key, base_url, model_name, prompt):
-    """Generates the App Profile JSON."""
+    """Generates the App Profile JSON with unpacking logic."""
     try:
+        # Explicit instructions to prevent nesting
         system_prompt = (
-            "You are an MLOps Architect. Return ONLY valid JSON adhering to the 'RichMLAppProfile' schema. "
-            "Do not include markdown formatting, backticks, or explanations. Just the JSON object."
+            "RETURN ONLY! (NO extra chracters, comments, etc.) a valid JSON adhering STRICTLY to the 'RichMLAppProfile' schema. "
+            "IMPORTANT: The output must be a FLAT JSON object. Do NOT wrap it in a root key like 'profile' or 'result'. "
+            "ENSURE ALL fields are present and DO NOT wrap your output in markdown."
         )
 
+        content = ""
+        
         if provider == "Google Gemini":
             genai.configure(api_key=api_key)            
             model = genai.GenerativeModel(model_name,
@@ -29,7 +48,7 @@ def query_ai_json(provider, api_key, base_url, model_name, prompt):
                 }
             )
             response = model.generate_content(system_prompt + "\nUser Intent: " + prompt)
-            return json.loads(_clean_response(response.text))
+            content = response.text
         
         else:
             client = OpenAI(base_url=base_url, api_key="ollama")
@@ -43,11 +62,16 @@ def query_ai_json(provider, api_key, base_url, model_name, prompt):
                 ],
                 temperature=0.1
             )
-            content = _clean_response(response.choices[0].message.content)
-            return json.loads(content)
+            content = response.choices[0].message.content
+
+        # Parse and Unwrap
+        data = json.loads(_clean_response(content))
+        data = _unwrap_json(data)
+        
+        return data
 
     except json.JSONDecodeError:
-        return {"error": "Failed to parse AI response. Try again."}
+        return {"error": "Failed to parse AI response. The model returned invalid JSON."}
     except Exception as e:
         return {"error": str(e)}
 
@@ -57,7 +81,7 @@ def query_ai_text(provider, api_key, base_url, model_name, prompt):
         if provider == "Google Gemini":
             genai.configure(api_key=api_key)
             res = genai.GenerativeModel(model_name).generate_content(prompt)
-            return _clean_response(res.text) # Clean marks just in case
+            return _clean_response(res.text)
         else:
             client = OpenAI(base_url=base_url, api_key="ollama")
             res = client.chat.completions.create(
