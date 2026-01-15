@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictor</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* Custom aesthetics */
+        body {
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        }
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Main Container -->
+    <div class="glass-panel w-full max-w-4xl rounded-2xl p-6 space-y-6">
+        
+        <!-- Header & Controls -->
+        <div class="flex flex-col md:flex-row justify-between items-center border-b border-gray-700 pb-4">
+            <div>
+                <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
+                    Real-time Prediction
+                </h1>
+            </div>
+            
+            <div class="flex items-center gap-4 mt-4 md:mt-0">
+                <div class="flex items-center gap-2">
+                    <label class="text-sm font-medium text-gray-300"></label>
+                    <input type="text" id="endpointInput" value="http://localhost:5000/v1/predict" 
+                        class="w-64 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white focus:outline-none focus:border-cyan-500 transition">
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="number" id="intervalInput" value="500" min="100" 
+                    class="w-20 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white focus:outline-none focus:border-cyan-500 transition">
+                    <label class="text-sm font-medium text-gray-300">(ms)</label>
+                </div>
+                
+                <button id="toggleBtn" onclick="toggleStream()" 
+                    class="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-lg font-semibold transition shadow-lg shadow-cyan-500/30 flex items-center gap-2">
+                    <span id="btnIcon">▶</span> <span id="btnText">Start</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="flex justify-between items-center text-sm">
+            <div class="flex items-center gap-2">
+                Status: <span id="statusIndicator" class="status-dot bg-red-500"></span> 
+                <span id="statusText" class="text-gray-400">Stopped</span>
+            </div>
+            <div class="text-cyan-400 font-mono">
+                Last Value: <span id="lastValue" class="text-lg font-bold">--</span>
+            </div>
+        </div>
+
+        <!-- Chart Container -->
+        <div class="relative h-64 w-full bg-slate-800/50 rounded-xl p-2 border border-slate-700">
+            <canvas id="predictionChart"></canvas>
+        </div>
+
+        <!-- Request/Response Log (Visual Candy) -->
+        <div class="grid grid-cols-2 gap-4">
+            <div class="bg-slate-900 rounded-lg p-3 border border-slate-800">
+                <p class="text-xs text-gray-500 uppercase font-bold mb-1">Last Sent Payload (Input)</p>
+                <code id="logInput" class="text-xs text-green-400 block font-mono truncate">Waiting...</code>
+            </div>
+            <div class="bg-slate-900 rounded-lg p-3 border border-slate-800">
+                <p class="text-xs text-gray-500 uppercase font-bold mb-1">Last Response Data</p>
+                <code id="logOutput" class="text-xs text-blue-400 block font-mono truncate">Waiting...</code>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const MAX_DATA_POINTS = 50; 
+        
+        const API_URL = 'http://localhost:5000/v1/predict';
+
+        let endpoint = API_URL;
+        let isRunning = false;
+        let timerId = null;
+        let counter = 0;
+        let chart;
+
+        // --- UI Elements ---
+        const btnText = document.getElementById('btnText');
+        const btnIcon = document.getElementById('btnIcon');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const intervalInput = document.getElementById('intervalInput');
+        const endpointInput = document.getElementById('endpointInput');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const lastValueDisplay = document.getElementById('lastValue');
+        const logInput = document.getElementById('logInput');
+        const logOutput = document.getElementById('logOutput');
+
+        // --- Initialize Chart ---
+        function initChart() {
+            const ctx = document.getElementById('predictionChart').getContext('2d');
+            
+            // Gradient fill
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(34, 211, 238, 0.5)'); // Cyan
+            gradient.addColorStop(1, 'rgba(34, 211, 238, 0.0)');
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Prediction Output',
+                        data: [],
+                        borderColor: '#22d3ee', // Cyan 400
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        fill: true,
+                        tension: 0.4 // Smooth curves
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false, // Disable animation for performance on high freq
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    },
+                    scales: {
+                        x: {
+                            display: false, // Hide X axis labels for cleaner look
+                            grid: { display: false }
+                        },
+                        y: {
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Helper: Generate Random Payload ---
+        const INPUT_LABELS = [
+            "snr_db",
+            "rsrp_dbm",
+            "rsrq_db",
+            "cqi",
+            "speed_mps",
+            "azimuth_deg",
+            "elevation_deg",
+            "beam_candidate"
+        ];
+
+        const INPUT_RANGES = {
+            snr_db: [10, 30],
+            rsrp_dbm: [-100, -70],
+            rsrq_db: [-15, -5],
+            cqi: [1, 15],
+            speed_mps: [0, 15],
+            azimuth_deg: [0, 360],
+            elevation_deg: [0, 20],
+            beam_candidate: [0, 7]
+        };
+
+        function randFloat(min, max, fixed = 2) {
+            return +(Math.random() * (max - min) + min).toFixed(fixed);
+        }
+
+        function randInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function randomInput() {
+            return INPUT_LABELS.map(label => {
+                const [min, max] = INPUT_RANGES[label];
+
+                if (label === "cqi" || label === "beam_candidate") {
+                    return randInt(min, max);
+                }
+
+                if (label === "azimuth_deg") {
+                    return randFloat(min, max, 1);
+                }
+                
+                return randFloat(min, max, 2);
+            });
+        }
+
+        function generatePayload() {
+            // Generate array of 8 random floats between 0 and 1           
+            return { "input": randomInput() };
+        }
+
+        // --- Core: Send Request ---
+        async function sendRequest() {
+            // Visual Update for Payload
+            const payload = generatePayload();                    
+            logInput.textContent = JSON.stringify(payload.input);
+            try {
+                const startTime = performance.now();
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+                const data = await response.json();
+                // Visual Update for Response
+                logOutput.textContent = JSON.stringify(data);
+
+                // --- Process Data for Chart ---
+                // We assume data.prediction is an array. We take the first element for the chart.
+                const predValue = data.prediction && data.prediction.length > 0 ? data.prediction[0][0] : 0;
+                
+                updateChart(predValue);
+                setStatus('Active', true);
+
+            } catch (error) {
+                console.error("Fetch error:", error);
+                logOutput.textContent = "Error: " + error.message;
+                setStatus('Connection Error', false);
+            }
+        }
+
+        // --- Chart Update Logic ---
+        function updateChart(value) {
+            const now = new Date().toLocaleTimeString();
+
+            // Add new data
+            chart.data.labels.push(now);
+            chart.data.datasets[0].data.push(value);
+
+            // Remove old data if limit reached
+            if (chart.data.labels.length > MAX_DATA_POINTS) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+
+            chart.update();
+            lastValueDisplay.textContent = parseFloat(value).toFixed(4);
+        }
+
+        // --- UI Logic ---
+        function setStatus(text, isGood) {
+            statusText.textContent = text;
+            if (isGood) {
+                statusIndicator.classList.remove('bg-red-500', 'bg-yellow-500');
+                statusIndicator.classList.add('bg-green-500', 'animate-pulse');
+            } else {
+                statusIndicator.classList.remove('bg-green-500', 'animate-pulse');
+                statusIndicator.classList.add('bg-red-500');
+            }
+        }
+
+        function toggleStream() {
+            if (isRunning) {
+                // Stop
+                clearInterval(timerId);
+                isRunning = false;
+                btnText.textContent = "Start";
+                btnIcon.textContent = "▶";
+                toggleBtn.classList.replace('bg-red-600', 'bg-cyan-600');
+                toggleBtn.classList.replace('hover:bg-red-500', 'hover:bg-cyan-500');
+                toggleBtn.classList.replace('shadow-red-500/30', 'shadow-cyan-500/30');
+                setStatus('Stopped', false);
+            } 
+            else {
+                // Start
+                const interval = parseInt(intervalInput.value) || 1000;
+                endpoint = endpointInput.value.trim() || API_URL;
+        
+                // Immediate first call
+                sendRequest();
+                
+                // Set interval
+                timerId = setInterval(sendRequest, interval);
+                
+                isRunning = true;
+                btnText.textContent = "Stop";
+                btnIcon.textContent = "⏹";
+                toggleBtn.classList.replace('bg-cyan-600', 'bg-red-600');
+                toggleBtn.classList.replace('hover:bg-cyan-500', 'hover:bg-red-500');
+                toggleBtn.classList.replace('shadow-cyan-500/30', 'shadow-red-500/30');
+                setStatus('Active', true);
+            }
+        }
+
+        // Handle Input Change while running
+        intervalInput.addEventListener('change', () => {
+            if (isRunning) {
+                clearInterval(timerId);
+                const interval = parseInt(intervalInput.value) || 1000;
+                timerId = setInterval(sendRequest, interval);
+            }
+        });
+
+        endpointInput.addEventListener('change', () => {
+            endpoint = endpointInput.value.trim();
+        });
+
+        // Start
+        initChart();
+    </script>
+</body>
+</html>

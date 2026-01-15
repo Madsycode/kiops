@@ -108,7 +108,6 @@ class DockerExecutionEngine:
             bits, stat = src.get_archive(source_path)
             
             # 2. Put tar stream into destination
-            # Note: put_archive takes the directory where the file should be unpacked
             dst.put_archive(path=destination_dir, data=bits)
             return True
         except Exception as e:
@@ -116,6 +115,8 @@ class DockerExecutionEngine:
 
     def get_logs(self, container):
         try:
-            container.reload()
-            return container.logs().decode("utf-8", errors="replace")
-        except Exception: return "Error reading logs."    
+            return container.logs(stdout=True,
+                stderr=True,tail=200
+            ).decode("utf-8", errors="replace")
+        except Exception as e:
+            return f"Error reading logs: {e}"

@@ -76,13 +76,9 @@ with tab1:
     left_column, right_column = st.columns(2)
 
     with left_column:        
-        st.markdown("### 1. 🧠 Define Intent")
-        intent = st.text_area("What do you want to build?", height=300)                                
-        if st.button("Generate Descriptor", type="primary"):
-            if not intent: 
-                st.error(f"No intent provided!")
-                st.stop()
-
+        st.markdown("### 🧠 Define Intent")
+        intent = show_code(value="", lang="markdown", height=500, tab=0)                                
+        if st.button("Generate Descriptor", type="primary") and intent:           
             with st.spinner("AI is analyzing requirements..."):
                 data = query_ai_json(provider, api_key, base_url, model_choice, intent)                                
                 if isinstance(data, dict) and "error" not in data:
@@ -90,15 +86,18 @@ with tab1:
                 else:
                     st.error(f"Descriptor generation failed: {data.get('error')}")
                     st.stop()
+        else:            
+            st.error(f"No intent provided!")
 
-            # show architecture diagram      
-            st.markdown("### 2. 🧩 Architecture Preview")              
+        # show architecture diagram 
+        st.markdown("### 🧩 Architecture Preview")              
+        if st.session_state.descriptor:     
             show_diagram(st.session_state.descriptor) 
 
     # show desciptor code
     with right_column:    
-        if "descriptor" in st.session_state:
-            st.markdown("### 2. 🧾 Descriptor (JSON)")
+        if st.session_state.descriptor:
+            st.markdown("### 🧾 Descriptor (JSON)")
             st.session_state.descriptor = show_source(st.session_state.descriptor, 800)
 
 # ==========================================
@@ -117,12 +116,10 @@ with tab2:
     # --- VISUAL TOPOLOGY ---
     st.subheader(f"🛠️ Building: {descriptor.name}")    
     t1, t2, t3 = st.columns(3)
-    t1.info(f"**Train Node:**\n\n`{descriptor.training.resource.container}`")
-    t2.success(f"**Target Node:**\n\n`{descriptor.inference.resource.container}`")
+    t1.info(f"**Training Node:**\n\n`{descriptor.training.resource.container}`")
+    t2.success(f"**Inference Node:**\n\n`{descriptor.inference.resource.container}`")
     t3.warning(f"**Inference:**\n\n`{hostname}`")
     st.divider()
-
-    #col_code, col_run = st.columns([1, 1])
     
     # ----------------- CODE GENERATION -----------------
     st.subheader("📝 Blueprint Generation")
@@ -175,7 +172,7 @@ with tab2:
                 "8. Keep the image minimal and production-safe.\n\n"
 
                 "PACKAGE REQUIREMENTS:\n"
-                "1. Always run: pip install --no-cache-dir scikit-learn pandas flask torch\n"
+                "1. Always run: pip install --no-cache-dir scikit-learn pandas flask flask_cors torch\n"
                 "2. Install additional Python packages only if required by the context.\n"
                 "3. If GPU acceleration is required, install torch WITHOUT CUDA-specific base images.\n\n"
 
@@ -190,7 +187,7 @@ with tab2:
 
     if 'dockerfile' in st.session_state:
         st.markdown("📄 Dockerfile")
-        st.session_state.dockerfile = show_code(st.session_state.dockerfile, "dockerfile", 60)
+        st.session_state.dockerfile = show_code(st.session_state.dockerfile, "dockerfile", 80)
 
     if 'train_script' in st.session_state:
         st.markdown("📄 train.py")
@@ -200,12 +197,9 @@ with tab2:
     if 'train_script' in st.session_state:
         st.subheader("🏗️ Infrastructure Execution")
         if dex.is_available():
-            if st.button("Build & Train", type="primary"):
-                
-                log_placeholder = st.empty()
-                
-                # 1. Build
-                with st.status("Building Container Image...") as s:
+            if st.button("Build & Train", type="primary"):                             
+                # 1. Build image
+                with st.status("Building training container...") as s:
                     res = dex.build_custom_image(st.session_state.dockerfile)
                     if "Failed" in res or "Error" in res:
                         s.update(label="Build Failed", state="error")
@@ -214,69 +208,67 @@ with tab2:
                     else:
                         s.update(label="Image Built Successfully", state="complete")
                 
-                # 2. Train
-                with st.spinner("Initializing Training Container..."):
+                # 2. Training
+                with st.spinner("Initializing training process..."):
                     container = dex.run_container(st.session_state.train_script, "train.py", 
                         descriptor.training.resource.container, True)
 
                 if container:
+                    st.code(dex.get_logs(container), language="text")
                     st.session_state.train_container = container
                     st.success("Training Completed!")                    
-                    # Show Logs
-                    logs = dex.get_logs(container)
-                    st.code(logs, language="text")
-
-        elif not dex.is_available():
+                st.divider()
+        else:
             st.warning("Docker is not available. Start Docker Desktop to run code.")
 
-        st.divider()
     
     # ----------------- GENERATE SERVICE -----------------
 
+    st.subheader("🚀 Service Deployment")
     if 'train_container' in st.session_state:
-        st.subheader("🚀 Service Deployment")
-        if st.button("Generate Service", type="primary"):           
-            with st.spinner(f"Generating code ..."):
-                # 1. Generate Script
-                prompt_serve = (
-                    "RETURN ONLY the Python source code. Do NOT include explanations, markdown, comments, or extra characters.\n\n"
+        if st.button("Generate Service", type="primary"):                       
+            # 1. Generate Script
+            prompt_serve = (
+                "RETURN ONLY the Python source code. Do NOT include explanations, markdown, comments, or extra characters.\n\n"
 
-                    "TASK:\n"
-                    "Generate a Python inference service using Flask.\n\n"
+                "TASK:\n"
+                "Generate a Python inference service using Flask.\n\n"
 
-                    "CONTEXT:\n"
-                    f"2. Model config: {descriptor.inference.model.model_dump()}.\n"
-                    f"1. Service config: {descriptor.service.model_dump()}.\n\n"
+                "CONTEXT:\n"
+                f"2. Model config: {descriptor.inference.model.model_dump()}.\n"
+                f"1. Service config: {descriptor.service.model_dump()}.\n\n"
 
-                    "CRITICAL CONSTRAINTS:\n"
-                    "1. This script is for INFERENCE ONLY. Do NOT include training logic.\n"
-                    "2. The model object is stored in '/models' and must be loaded once at startup.\n"
-                    "4. The model filename follows the format '(name)_(version).(extension)'.\n"
-                    "5. Use 'weights_only=False' when loading the model"
-                    "6. Do NOT assume any other files exist.\n\n"
+                "CRITICAL CONSTRAINTS:\n"
+                "1. This script is for INFERENCE ONLY. Do NOT include training logic.\n"
+                "2. The model object is stored in '/models' and must be loaded once at startup.\n"
+                "4. The model filename follows the format '(name)_(version).(extension)'.\n"
+                "5. Use 'weights_only=False' when loading the model"
+                "6. Do NOT assume any other files exist.\n\n"
 
-                    "MODEL LOADING:\n"
-                    "1. Load the model from disk using the appropriate library inferred from the model config.\n"
-                    "2. Store the loaded model in a global variable.\n\n"
+                "MODEL LOADING:\n"
+                "1. Load the model from disk using the appropriate library inferred from the model config.\n"
+                "2. Store the loaded model in a global variable.\n\n"
 
-                    "API REQUIREMENTS:\n"
-                    f"1. Create a POST endpoint at '/{descriptor.service.version}{descriptor.service.endpoint}'.\n"
-                    "2. Extract input features from JSON key 'input'. Example: features = request.json['input']\n"
-                    "3. Convert input to a 2D array for sklearn-style models. e.g., prediction = model.predict([features])\n"
-                    "4. Return a JSON response exactly in the form: {'prediction': result.tolist()}\n\n"
+                "API REQUIREMENTS:\n"
+                f"1. Create a POST endpoint at '/{descriptor.service.version}{descriptor.service.endpoint}'.\n"
+                "2. Extract input features from JSON key 'input'. Example: features = request.json['input']\n"
+                "3. Convert input to a 2D array for sklearn-style models. e.g., prediction = model.predict([features])\n"
+                "4. Return a JSON response exactly in the form: {'prediction': result.tolist()}\n\n"
 
-                    "SERVER CONFIGURATION:\n"
-                    f"1. Run the Flask app with host='0.0.0.0' and port={descriptor.service.port}.\n"
-                    "2. Do NOT enable debug mode.\n"
-                    "3. Do NOT add extra routes.\n"
-                )
+                "SERVER CONFIGURATION:\n"
+                f"1. Run the Flask app with host='0.0.0.0' and port={descriptor.service.port}.\n"
+                "2. Allow all origins with 'flask_cors' e.g., CORE(app)"
+                "2. Do NOT enable debug mode.\n"
+                "3. Do NOT add extra routes.\n"
+            )
 
             # set server code
-            st.session_state.serve_script = query_ai_text(provider, api_key, base_url, model_choice, prompt_serve)  
+            with st.spinner("Generating code ..."):
+                st.session_state.serve_script = query_ai_text(provider, api_key, base_url, model_choice, prompt_serve)  
 
     if 'serve_script' in st.session_state:
         st.markdown("📄 server.py")              
-        st.session_state.serve_script = show_code(st.session_state.serve_script, "python", 300)
+        st.session_state.serve_script = show_code(st.session_state.serve_script, "python", 400)
 
     st.divider()
 
@@ -294,20 +286,20 @@ with tab2:
                 # 3. TRANSFER MODEL ARTIFACT 
                 if container:
                     with st.spinner("📦 Transferring Model Artifacts..."):
-                        model_name = f"{descriptor.inference.model.name}_{descriptor.inference.model.version}{descriptor.inference.model.file_extension}"
-                        src_name = st.session_state.train_container.name
-                        dst_name = container.name
-                        
+                        model_name = f"{descriptor.inference.model.name}_{descriptor.inference.model.version}{descriptor.inference.model.file_extension}"                    
                         # Copy from Train -> Deploy
-                        res = dex.copy_model(src_name, f"/models/{model_name}", dst_name, "/models")
+                        res = dex.copy_model(descriptor.training.resource.container, 
+                            f"/models/{model_name}", descriptor.inference.resource.container, "/models")
                         if res is True:
-                            st.toast(f"Model transferred to {dst_name}", icon="📦")
+                            st.toast(f"Model transferred to {descriptor.inference.resource.container}", icon="📦")
                         else:
                             st.warning(f"Copy Warning: {res}")
 
-                    st.session_state.deploy_container = container                                
-                    st.code(dex.get_logs(container), language="text")
+                if container:
                     st.success(f"Service active at {hostname} on node **{descriptor.inference.resource.container}**")
+                    st.code(dex.get_logs(container), language="text")
+                    st.session_state.deploy_container = container                  
+
 
 # ==========================================
 # TAB3
