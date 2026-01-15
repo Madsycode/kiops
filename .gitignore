@@ -1,4 +1,6 @@
 /.env
-/context
-/data
+/tests
+/models
+/scripts
+/datasets
 /__pycache__

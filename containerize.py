@@ -6,13 +6,20 @@ from docker.errors import NotFound
 from ontology import RichMLAppProfile
 
 class DockerExecutionEngine:
-    def __init__(self):
-        self.client = None
+    def __init__(self, img_tag = "kiops:latest"):
         self.dataset_path = os.path.abspath("datasets") 
         self.script_path = os.path.abspath("scripts")
         self.model_path = os.path.abspath("models") 
+        self.image_tag = img_tag
+        self.client = None
         
+        for p in [self.dataset_path, self.dataset_path]:
+            os.makedirs(p, exist_ok=True)
+
         for p in [self.script_path, self.model_path]:
+            os.makedirs(p, exist_ok=True)
+
+        for p in [self.model_path, self.model_path]:
             os.makedirs(p, exist_ok=True)
 
         self._fix_wsl_docker_config()
@@ -39,14 +46,14 @@ class DockerExecutionEngine:
         try: return self.client.ping()
         except Exception: return False
 
-    def build_custom_image(self, dockerfile_content, tag):
+    def build_custom_image(self, dockerfile_content):
         if not self.client: return "Error: Docker client not initialized."
         f = io.BytesIO(dockerfile_content.encode('utf-8'))
         logs = []
         try:
             build_generator = self.client.api.build(
-                fileobj=f, tag=tag, rm=True, decode=True 
-            )
+                fileobj=f, tag=self.image_tag, rm=True, decode=True)
+            
             for chunk in build_generator:
                 if 'error' in chunk:
                     return f"Build Error: {chunk['error']}\n{chunk.get('errorDetail', '')}"
@@ -56,7 +63,7 @@ class DockerExecutionEngine:
             return "\n".join(logs)
         except Exception as e: return f"Unexpected Error: {e}"
 
-    def run_container(self, image_tag, script_content, script_name, container_name, mode="training", ports=None):       
+    def run_container(self, script_content, script_name, container_name, train_mode=True, ports=None):       
         if not self.is_available(): return None
         
         host_script_path = os.path.join(self.script_path, script_name)
@@ -76,17 +83,13 @@ class DockerExecutionEngine:
             except NotFound: pass
 
             container = self.client.containers.run(
-                image_tag,
-                command=["python", script_name], 
-                volumes=volumes,
-                detach=True,
-                name=container_name,
-                ports=ports if ports else {},
+                self.image_tag, command=["python", script_name], volumes=volumes, detach=True,
+                name=container_name, ports=ports if ports else {},
                 environment={"PYTHONUNBUFFERED": "1"}, 
                 working_dir="/app"
             )
             
-            if mode == "training":
+            if train_mode:
                 container.wait()
                 
             return container
@@ -110,9 +113,6 @@ class DockerExecutionEngine:
             return True
         except Exception as e:
             return f"Copy Error: {e}"
-        
-    def model_dir(self):
-        return self.model_path
 
     def get_logs(self, container):
         try:

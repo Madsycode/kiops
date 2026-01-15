@@ -4,7 +4,7 @@ import streamlit as st
 from streamlit_ace import st_ace
 from ontology import RichMLAppProfile
 
-def show_descriptor(value: RichMLAppProfile, height: int = 500):
+def show_source(value: RichMLAppProfile, height: int = 500):
     code = st_ace(
         value=value.model_dump_json(indent=4),
         language="json",
@@ -32,15 +32,7 @@ def show_descriptor(value: RichMLAppProfile, height: int = 500):
         st.error(f"Schema validation error: {e}")
         return value
 
-
-def show_code(value, lang, height = 500):
-        return st_ace(value, language=lang, theme="monokai", height=height, 
-            font_size=14, tab_size=4, show_gutter=True)
-        
-
-
-def show_arch(descriptor):
-    st.markdown("### 2. Architecture Blueprint")
+def show_diagram(descriptor):
     g = graphviz.Digraph()
     g.attr(rankdir="LR", splines="ortho", bgcolor="transparent")
     g.attr('node', fontname="Inter", fontsize="10", style="filled", shape="box")
@@ -72,5 +64,8 @@ def show_arch(descriptor):
 
     st.graphviz_chart(g, use_container_width=True)
 
-            
-       
+def show_code(value, lang, height = 500):
+    return st_ace(value, language=lang, theme="monokai", height=height, 
+        font_size=14, tab_size=4, show_gutter=True)
+        
+  

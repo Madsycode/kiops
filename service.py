@@ -12,7 +12,7 @@ from styles import inject_custom_css
 from ontology import RichMLAppProfile
 from containerize import DockerExecutionEngine
 from generative import query_ai_json, query_ai_text
-from helpers import show_descriptor, show_code, show_arch
+from utils import show_source, show_code, show_diagram
 
 # Load Env
 load_dotenv()
@@ -32,11 +32,7 @@ if 'docker' not in st.session_state: st.session_state.docker = DockerExecutionEn
 if 'descriptor' not in st.session_state: st.session_state.descriptor = None
 if 'messages' not in st.session_state: st.session_state.messages = []
 
-tab1, tab2, tab3 = st.tabs([
-    "🧩 Descriptor",
-    "🏭 Factory",
-    "💬 Chat",
-])
+tab1, tab2, tab3 = st.tabs(["🧩 Descriptor", "🏭 Factory", "💬 Chat"])
 
 # ==========================================
 # SIDEBAR
@@ -77,25 +73,33 @@ with st.sidebar:
 # ==========================================
 
 with tab1:
-    st.markdown("### 1. Define Intent")
-    intent = st.text_area("What do you want to build?", height=500)    
-                            
-    if st.button("Generate Descriptor (BOM)", type="primary"):
-        if not intent: 
-            st.error(f"Not intent provided!")
-            st.stop()
+    left_column, right_column = st.columns(2)
 
-        with st.spinner("AI is analyzing requirements..."):
-            data = query_ai_json(provider, api_key, base_url, model_choice, intent)                
-            if isinstance(data, dict) and "error" not in data:
-                st.session_state.descriptor = RichMLAppProfile(**data)                          
-            else:
-                st.error(f"Descriptor generation failed: {data.get('error')}")
+    with left_column:        
+        st.markdown("### 1. 🧠 Define Intent")
+        intent = st.text_area("What do you want to build?", height=300)                                
+        if st.button("Generate Descriptor", type="primary"):
+            if not intent: 
+                st.error(f"No intent provided!")
+                st.stop()
 
-    if st.session_state.descriptor:            
-        show_arch(st.session_state.descriptor)        
-        st.markdown("### 📄 Descriptor (JSON)")
-        st.session_state.descriptor = show_descriptor(st.session_state.descriptor, 800)
+            with st.spinner("AI is analyzing requirements..."):
+                data = query_ai_json(provider, api_key, base_url, model_choice, intent)                                
+                if isinstance(data, dict) and "error" not in data:
+                    st.session_state.descriptor = RichMLAppProfile(**data)                          
+                else:
+                    st.error(f"Descriptor generation failed: {data.get('error')}")
+                    st.stop()
+
+            # show architecture diagram      
+            st.markdown("### 2. 🧩 Architecture Preview")              
+            show_diagram(st.session_state.descriptor) 
+
+    # show desciptor code
+    with right_column:    
+        if "descriptor" in st.session_state:
+            st.markdown("### 2. 🧾 Descriptor (JSON)")
+            st.session_state.descriptor = show_source(st.session_state.descriptor, 800)
 
 # ==========================================
 # TAB2
@@ -110,19 +114,15 @@ with tab2:
     # service host name
     hostname = f"{descriptor.service.host}:{descriptor.service.port}/{descriptor.service.version}{descriptor.service.endpoint}"
 
-    st.subheader(f"🛠️ {descriptor.name}")
-    #st.markdown("### 📦 Deployment Topology")
-    
     # --- VISUAL TOPOLOGY ---
+    st.subheader(f"🛠️ Building: {descriptor.name}")    
     t1, t2, t3 = st.columns(3)
     t1.info(f"**Train Node:**\n\n`{descriptor.training.resource.container}`")
     t2.success(f"**Target Node:**\n\n`{descriptor.inference.resource.container}`")
     t3.warning(f"**Inference:**\n\n`{hostname}`")
     st.divider()
 
-    # -----------------------
-
-    col_code, col_run = st.columns([1, 1])
+    #col_code, col_run = st.columns([1, 1])
     
     # ----------------- CODE GENERATION -----------------
     st.subheader("📝 Blueprint Generation")
@@ -190,7 +190,7 @@ with tab2:
 
     if 'dockerfile' in st.session_state:
         st.markdown("📄 Dockerfile")
-        st.session_state.dockerfile = show_code(st.session_state.dockerfile, "dockerfile", 80)
+        st.session_state.dockerfile = show_code(st.session_state.dockerfile, "dockerfile", 60)
 
     if 'train_script' in st.session_state:
         st.markdown("📄 train.py")
@@ -206,7 +206,7 @@ with tab2:
                 
                 # 1. Build
                 with st.status("Building Container Image...") as s:
-                    res = dex.build_custom_image(st.session_state.dockerfile, "kiops:latest")
+                    res = dex.build_custom_image(st.session_state.dockerfile)
                     if "Failed" in res or "Error" in res:
                         s.update(label="Build Failed", state="error")
                         st.error(res)
@@ -216,10 +216,8 @@ with tab2:
                 
                 # 2. Train
                 with st.spinner("Initializing Training Container..."):
-                    container = dex.run_container(
-                        "kiops:latest", st.session_state.train_script, "train.py", 
-                        f"kiops-train-{descriptor.name.lower().replace(' ', '-')}"
-                    )
+                    container = dex.run_container(st.session_state.train_script, "train.py", 
+                        descriptor.training.resource.container, True)
 
                 if container:
                     st.session_state.train_container = container
@@ -241,37 +239,37 @@ with tab2:
             with st.spinner(f"Generating code ..."):
                 # 1. Generate Script
                 prompt_serve = (
-                "RETURN ONLY the Python source code. Do NOT include explanations, markdown, comments, or extra characters.\n\n"
+                    "RETURN ONLY the Python source code. Do NOT include explanations, markdown, comments, or extra characters.\n\n"
 
-                "TASK:\n"
-                "Generate a Python inference service using Flask.\n\n"
+                    "TASK:\n"
+                    "Generate a Python inference service using Flask.\n\n"
 
-                "CONTEXT:\n"
-                f"1. Service config: {descriptor.service.model_dump()}.\n"
-                f"2. Model config: {descriptor.inference.model.model_dump()}.\n\n"
+                    "CONTEXT:\n"
+                    f"2. Model config: {descriptor.inference.model.model_dump()}.\n"
+                    f"1. Service config: {descriptor.service.model_dump()}.\n\n"
 
-                "CRITICAL CONSTRAINTS:\n"
-                "1. This script is for INFERENCE ONLY. Do NOT include training logic.\n"
-                f"2. The model object is stored in '/models' and must be loaded once at startup.\n"
-                "4. The model filename follows the format '(name)_(version).(extension)'.\n"
-                "5. The model is a full object not just the 'state_dict' do not use mode.eval()"
-                "5. Do NOT assume any other files exist.\n\n"
+                    "CRITICAL CONSTRAINTS:\n"
+                    "1. This script is for INFERENCE ONLY. Do NOT include training logic.\n"
+                    "2. The model object is stored in '/models' and must be loaded once at startup.\n"
+                    "4. The model filename follows the format '(name)_(version).(extension)'.\n"
+                    "5. Use 'weights_only=False' when loading the model"
+                    "6. Do NOT assume any other files exist.\n\n"
 
-                "MODEL LOADING:\n"
-                "1. Load the model from disk using the appropriate library inferred from the model config.\n"
-                "2. Store the loaded model in a global variable.\n\n"
+                    "MODEL LOADING:\n"
+                    "1. Load the model from disk using the appropriate library inferred from the model config.\n"
+                    "2. Store the loaded model in a global variable.\n\n"
 
-                "API REQUIREMENTS:\n"
-                f"1. Create a POST endpoint at '{descriptor.service.endpoint}'.\n"
-                "2. Extract input features from JSON key 'input'. Example: features = request.json['input']\n"
-                "3. Convert input to a 2D array for sklearn-style models. Example: prediction = model.predict([features])\n"
-                "4. Return a JSON response exactly in the form: {'prediction': result.tolist()}\n\n"
+                    "API REQUIREMENTS:\n"
+                    f"1. Create a POST endpoint at '/{descriptor.service.version}{descriptor.service.endpoint}'.\n"
+                    "2. Extract input features from JSON key 'input'. Example: features = request.json['input']\n"
+                    "3. Convert input to a 2D array for sklearn-style models. e.g., prediction = model.predict([features])\n"
+                    "4. Return a JSON response exactly in the form: {'prediction': result.tolist()}\n\n"
 
-                "SERVER CONFIGURATION:\n"
-                f"1. Run the Flask app with host='0.0.0.0' and port={descriptor.service.port}.\n"
-                "2. Do NOT enable debug mode.\n"
-                "3. Do NOT add extra routes.\n"
-            )
+                    "SERVER CONFIGURATION:\n"
+                    f"1. Run the Flask app with host='0.0.0.0' and port={descriptor.service.port}.\n"
+                    "2. Do NOT enable debug mode.\n"
+                    "3. Do NOT add extra routes.\n"
+                )
 
             # set server code
             st.session_state.serve_script = query_ai_text(provider, api_key, base_url, model_choice, prompt_serve)  
@@ -288,9 +286,8 @@ with tab2:
         if st.button("Deploy Service", type="primary"):
             with st.spinner(f"Deploying to {descriptor.inference.resource.container}..."):                    
                 # 2. Run Container
-                container = dex.run_container(
-                    "kiops:latest", st.session_state.serve_script, "serve.py", 
-                    descriptor.inference.resource.container, mode="serving",
+                container = dex.run_container(st.session_state.serve_script, "serve.py", 
+                    descriptor.inference.resource.container, train_mode=False,
                     ports={f'{descriptor.service.port}/tcp': descriptor.service.port} 
                 )
                 
@@ -311,67 +308,6 @@ with tab2:
                     st.session_state.deploy_container = container                                
                     st.code(dex.get_logs(container), language="text")
                     st.success(f"Service active at {hostname} on node **{descriptor.inference.resource.container}**")
-
-
-#  # --- INTERACTIVE TESTING ---
-#     if 'deploy_container' in st.session_state:
-#         st.divider()
-#         st.markdown("#### 🧪 Live Inference Lab")
-#         c1, c2 = st.columns([1, 1])
-        
-#         with c1:
-#             st.caption("📡 Container Logs")
-#             # Auto-refresh logs button
-#             if st.button("🔄 Refresh Logs", type="secondary", use_container_width=False):
-#                 pass 
-#             st.code(dex.get_logs(st.session_state.deploy_container), language="text")
-        
-#         with c2:
-#             st.caption("⚡ Test Service")
-            
-#             # 1. AI Data Generator
-#             if st.button("🎲 Generate Synthetic Input"):
-#                 with st.spinner("AI is generating context-aware test data..."):
-#                     # Construct prompt based on the specific App Profile
-#                     data_prompt = (
-#                         "RETURN ONLY! (NO extra chracters, comments, etc.) a VALID JSON object with "
-#                         "a single key 'input' containing the data list/vector base on this shape. "
-#                         f"Input Shape/Schema: {descriptor.model.input_shape}. "
-#                         "Example: {\"input\": [0.2, ...]}. "
-#                         "DO NOT wrap in markdown."
-#                     )
-                    
-#                     # Use existing JSON helper
-#                     generated_data = query_ai_json(provider, api_key, base_url, model_choice, data_prompt)
-                    
-#                     if isinstance(generated_data, dict) and "input" in generated_data:
-#                         st.session_state.test_payload = generated_data
-#                     else:
-#                         st.error("AI could not generate valid data. Using default.")
-#                         st.session_state.test_payload = {"input": [0.1]}
-
-#             # 2. Editable Payload UI
-#             default_val = st.session_state.get('test_payload', {"input": [0.5]})
-#             payload_str = st.text_area("API Request Payload (JSON)", 
-#                 value=json.dumps(default_val, indent=4), 
-#                 height=150
-#             )
-
-#             # 3. Send Request
-#             if st.button("🚀 Send Request", type="primary"):
-#                 try:
-#                     payload = json.loads(payload_str)
-#                     st.write(f"Sending to: `{hostname}`")
-                    
-#                     res = requests.post(f"{hostname}", json=payload, timeout=5)                    
-#                     st.success("Response Received:")
-#                     st.json(res.json())
-
-#                 except json.JSONDecodeError:
-#                     st.error("Invalid JSON in payload field.")
-#                 except Exception as e:
-#                     st.error(f"Connection Failed: {e}")
-#                     st.info("Ensure the container is running and Flask has started (check logs).")
 
 # ==========================================
 # TAB3
