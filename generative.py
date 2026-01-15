@@ -2,7 +2,7 @@ import re
 import json
 from openai import OpenAI
 import google.generativeai as genai
-from models import RichMLAppProfile
+from ontology import RichMLAppProfile
 
 def _clean_response(text):
     """Helper to strip markdown code blocks from LLM response."""
@@ -35,6 +35,7 @@ def query_ai_json(provider, api_key, base_url, model_name, prompt):
             "RETURN ONLY! (NO extra chracters, comments, etc.) a valid JSON adhering STRICTLY to the 'RichMLAppProfile' schema. "
             "IMPORTANT: The output must be a FLAT JSON object. Do NOT wrap it in a root key like 'profile' or 'result'. "
             "ENSURE ALL fields are present and DO NOT wrap your output in markdown."
+            "USE 'kiops-train-node' as container id for training."
         )
 
         content = ""

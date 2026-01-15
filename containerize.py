@@ -3,14 +3,16 @@ import io
 import json
 import docker
 from docker.errors import NotFound
+from ontology import RichMLAppProfile
 
 class DockerExecutionEngine:
     def __init__(self):
         self.client = None
-        self.context_path = os.path.abspath("context")
-        self.data_path = os.path.abspath("data") 
+        self.dataset_path = os.path.abspath("datasets") 
+        self.script_path = os.path.abspath("scripts")
+        self.model_path = os.path.abspath("models") 
         
-        for p in [self.context_path, self.data_path]:
+        for p in [self.script_path, self.model_path]:
             os.makedirs(p, exist_ok=True)
 
         self._fix_wsl_docker_config()
@@ -54,20 +56,17 @@ class DockerExecutionEngine:
             return "\n".join(logs)
         except Exception as e: return f"Unexpected Error: {e}"
 
-    def run_container(self, image_tag, script_content, script_name, container_name, mode="training", ports=None):
-        """
-        Added 'ports' argument. 
-        Format: {'5000/tcp': 5000} maps container 5000 to host 5000.
-        """
+    def run_container(self, image_tag, script_content, script_name, container_name, mode="training", ports=None):       
         if not self.is_available(): return None
         
-        host_script_path = os.path.join(self.context_path, script_name)
+        host_script_path = os.path.join(self.script_path, script_name)
         with open(host_script_path, "w", encoding='utf-8') as f:
             f.write(script_content)
             
         volumes = {
-            self.context_path: {'bind': '/app', 'mode': 'rw'},
-            self.data_path: {'bind': '/data', 'mode': 'rw'}
+            self.dataset_path: {'bind': '/datasets', 'mode': 'rw'},
+            self.model_path: {'bind': f'/models', 'mode': 'rw'},
+            self.script_path: {'bind': '/app', 'mode': 'rw'},
         }
         
         try:
@@ -112,8 +111,11 @@ class DockerExecutionEngine:
         except Exception as e:
             return f"Copy Error: {e}"
         
+    def model_dir(self):
+        return self.model_path
+
     def get_logs(self, container):
         try:
             container.reload()
             return container.logs().decode("utf-8", errors="replace")
-        except Exception: return "Error reading logs."
+        except Exception: return "Error reading logs."    
