@@ -138,7 +138,7 @@ with tab2:
                 f"3. Training config: {descriptor.training.model_dump()}.\n\n"
 
                 "CRITICAL REQUIREMENTS:\n"
-                f"1. Datasets are provided at runtime via a volume mounted at '/dataset'. Only load files from this path.\n"
+                f"1. Datasets are provided at runtime via a volume mounted at '/datasets'. Only load files from this path.\n"
                 f"2. The FULL model (not the state_dict) object should be saved in the runtime-mounted folder '/models'.\n"
                 "3. The model filename must follow the format '(name)_(version).(extension)'.\n"
                 "4. Use the appropriate ML library inferred from the model config (e.g., sklearn, PyTorch, etc.).\n"
@@ -212,7 +212,7 @@ with tab2:
                 # 2. Training
                 with st.spinner("Initializing training process..."):
                     container = dex.run_container(st.session_state.train_script, "train.py", 
-                        descriptor.training.resource.container, True)
+                        descriptor.training.resource.container)
 
                 if container:
                     st.code(dex.get_logs(container), language="text")
@@ -279,7 +279,7 @@ with tab2:
             with st.spinner(f"Deploying to {descriptor.inference.resource.container}..."):                    
                 # 2. Run Container
                 container = dex.run_container(st.session_state.serve_script, "serve.py", 
-                    descriptor.inference.resource.container, train_mode=False,
+                    descriptor.inference.resource.container, 
                     ports={f'{descriptor.service.port}/tcp': descriptor.service.port} 
                 )
                 
