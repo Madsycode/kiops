@@ -3,8 +3,8 @@ from typing import List, Optional, Literal
 
 class ObservationHook(BaseModel):
     name: str = Field(..., description="Hook name (e.g., snr_stream)")
-    schema: Literal["JSON", "YAML"] = Field(..., description="schema")
     frequency: str = Field(..., description="Frequency (e.g., 10ms, 100ms)")
+    data_schema: Literal["JSON", "YAML"] = Field(..., description="(e.g., json, yaml)")
 
 class ActionHook(BaseModel):
     name: str = Field(..., description="Hook name")

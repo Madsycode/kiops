@@ -4,11 +4,12 @@ import json
 import graphviz
 import requests
 import streamlit as st
+from pathlib import Path
 from dotenv import load_dotenv
-
+ROOT_DIR = Path(__file__).parent
 
 # Local Imports
-from styles import inject_custom_css
+from styles import intialize_layout
 from ontology import RichMLAppProfile
 from containerize import DockerExecutionEngine
 from generative import query_ai_json, query_ai_text
@@ -17,22 +18,20 @@ from utils import show_source, show_code, show_diagram
 # Load Env
 load_dotenv()
 
-# ==========================================
-# 1. SETUP & STATE
-# ==========================================
-
-st.set_page_config(layout="wide", page_icon="📡", page_title="6G MLOps Platform", initial_sidebar_state="expanded")
-
-# Apply CSS
-inject_custom_css()
+# Apply layout
+intialize_layout()
 
 # Initialize State
-
 if 'docker' not in st.session_state: st.session_state.docker = DockerExecutionEngine()
 if 'descriptor' not in st.session_state: st.session_state.descriptor = None
 if 'messages' not in st.session_state: st.session_state.messages = []
 
-tab1, tab2, tab3 = st.tabs(["🧩 Descriptor", "🏭 Factory", "💬 Chat"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🚀 Onboarding",
+    "🏗️ Factory",
+    "🧠 Context",
+    "ℹ️ Info"
+])
 
 # ==========================================
 # SIDEBAR
@@ -77,8 +76,12 @@ with tab1:
 
     with left_column:        
         st.markdown("### 🧠 Define Intent")
-        intent = show_code(value="", lang="markdown", height=500, tab=0)                                
-        if st.button("Generate Descriptor", type="primary") and intent:           
+        intent = show_code(value="", lang="markdown", height=400, tab=0)                                
+        if st.button("Generate Descriptor", type="primary"):           
+            if not intent:            
+                st.error(f"No intent provided!")
+                st.stop()
+
             with st.spinner("AI is analyzing requirements..."):
                 data = query_ai_json(provider, api_key, base_url, model_choice, intent)                                
                 if isinstance(data, dict) and "error" not in data:
@@ -86,12 +89,10 @@ with tab1:
                 else:
                     st.error(f"Descriptor generation failed: {data.get('error')}")
                     st.stop()
-        else:            
-            st.error(f"No intent provided!")
 
         # show architecture diagram 
-        st.markdown("### 🧩 Architecture Preview")              
         if st.session_state.descriptor:     
+            st.markdown("### 🧩 Architecture Preview")              
             show_diagram(st.session_state.descriptor) 
 
     # show desciptor code
@@ -108,8 +109,8 @@ with tab2:
     if not st.session_state.descriptor:
         st.warning("⚠️ Please generate a descriptor in the 'Onboarding' tab first.")
         st.stop()        
-    descriptor = st.session_state.descriptor
 
+    descriptor = st.session_state.descriptor
     # service host name
     hostname = f"{descriptor.service.host}:{descriptor.service.port}/{descriptor.service.version}{descriptor.service.endpoint}"
 
@@ -221,7 +222,6 @@ with tab2:
         else:
             st.warning("Docker is not available. Start Docker Desktop to run code.")
 
-    
     # ----------------- GENERATE SERVICE -----------------
 
     st.subheader("🚀 Service Deployment")
@@ -300,13 +300,16 @@ with tab2:
                     st.code(dex.get_logs(container), language="text")
                     st.session_state.deploy_container = container                  
 
-
 # ==========================================
 # TAB3
 # ==========================================
 
 with tab3:
-    st.markdown("### Contextual Assistant")
+    if not st.session_state.descriptor:
+        st.warning("⚠️ Please generate a descriptor in the 'Onboarding' tab first.")
+        st.stop() 
+
+    st.markdown("### 💬 Contextual Assistant")
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.write(m["content"])
     
@@ -320,3 +323,34 @@ with tab3:
         
         st.session_state.messages.append({"role": "assistant", "content": ans})
         with st.chat_message("assistant"): st.write(ans)
+
+# ==========================================
+# TAB4
+# ==========================================
+
+with tab4:   
+    col1, col2 = st.columns([1, 2])    
+    with col1:
+       st.markdown(
+            """
+            # Agentic MLOps #
+
+            ### Interface Layer
+            - Intent-based descriptor (BOMs)
+            
+            ### Resource Layer
+            - Dynamic resource allocation  
+
+            ### Execution Layer
+            - Code generator for pipeline orchestration
+
+            ### Compliance Layer
+            - Semantic, context-aware conflict resolution  
+
+            ### Monitoring Layer
+            - Dynamic visualization via context-aware retrieval
+            """
+        )
+    
+    with col2:
+        st.image(f"{ROOT_DIR}/images/mlops.png", use_container_width=True) 

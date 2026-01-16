@@ -1,6 +1,9 @@
 import streamlit as st
 
-def inject_custom_css():
+
+def intialize_layout():
+    st.set_page_config(layout="wide", page_icon="📡", page_title="6G MLOps Platform", initial_sidebar_state="expanded")
+    
     st.markdown("""
     <style>
         /* Global Font & Colors */
