@@ -41,8 +41,8 @@ with st.sidebar:
     st.markdown(
         """<div style="text-align: center; margin-bottom: 10px;">
             <div style="font-size: 6rem;">📡</div>
-            <h1 style="margin:0;">Agentic MLOps Platform</h1>
-            <div style="font-size: 0.8rem; color: #666;">Agentic MLOps Executive v1.0</div>
+            <h1 style="margin:0;">Agentic MLOps Executive</h1>
+            <div style="font-size: 0.8rem; color: #666;">Version v1.0</div>
         </div>""",
         unsafe_allow_html=True
     ) 
