@@ -10,7 +10,7 @@ def show_source(value: RichMLAppProfile, height: int = 500):
         language="json",
         theme="monokai",
         height=height,
-        font_size=16,
+        font_size=18,
         tab_size=4,
         show_gutter=True,
         wrap = True
@@ -76,7 +76,7 @@ def show_diagram(descriptor):
 
     st.graphviz_chart(g, use_container_width=True)
 
-def show_code(value, lang, height = 500, font = 16, tab = 4):
+def show_code(value, lang, height = 500, font = 18, tab = 4):
     return st_ace(value, language=lang, theme="monokai", height=height, 
         font_size=font, tab_size=tab, show_gutter=True, wrap = True)
         

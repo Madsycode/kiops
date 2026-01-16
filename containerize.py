@@ -63,7 +63,7 @@ class DockerExecutionEngine:
             return "\n".join(logs)
         except Exception as e: return f"Unexpected Error: {e}"
 
-    def run_container(self, script_content, script_name, container_name, ports=None):       
+    def run_container(self, script_content, script_name, container_name, wait=True, ports=None):       
         if not self.is_available(): return None
         
         host_script_path = os.path.join(self.script_path, script_name)
@@ -83,13 +83,16 @@ class DockerExecutionEngine:
             except NotFound: pass
 
             container = self.client.containers.run(
-                self.image_tag, command=["python", script_name], volumes=volumes, detach=False, stdout = True, stderr = True,
+                self.image_tag, command=["python", script_name], volumes=volumes, 
+                detach=True, stdout = True, stderr = True,
                 name=container_name, ports=ports if ports else {},
                 environment={"PYTHONUNBUFFERED": "1"}, 
                 working_dir="/app"
             )
             
-            container.wait()                
+            if wait:
+                container.wait()                
+                
             return container
         except Exception as e:
             print(f"Run Error: {e}")

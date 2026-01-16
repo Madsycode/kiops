@@ -5,7 +5,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-model = torch.load('/models/beam-index-prediction-model_v1.pth', weights_only=False)
+model = torch.load('/models/beam-prediction-model_v1.pth', weights_only=False)
 model.eval()
 
 @app.route('/v1/predict', methods=['POST'])

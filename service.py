@@ -212,7 +212,7 @@ with tab2:
                 # 2. Training
                 with st.spinner("Initializing training process..."):
                     container = dex.run_container(st.session_state.train_script, "train.py", 
-                        descriptor.training.resource.container)
+                        descriptor.training.resource.container, wait=True)
 
                 if container:
                     st.code(dex.get_logs(container), language="text")
@@ -279,7 +279,7 @@ with tab2:
             with st.spinner(f"Deploying to {descriptor.inference.resource.container}..."):                    
                 # 2. Run Container
                 container = dex.run_container(st.session_state.serve_script, "serve.py", 
-                    descriptor.inference.resource.container, 
+                    descriptor.inference.resource.container, wait=False, 
                     ports={f'{descriptor.service.port}/tcp': descriptor.service.port} 
                 )
                 
