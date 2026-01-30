@@ -9,7 +9,7 @@ Use the following fields from the CSV files:
 - Input features: snr_db, rsrp_dbm, rsrq_db, cqi, speed_mps, azimuth_deg, elevation_deg, beam_candidate
 - Target label: beam_index
 
-SERVICE FORMAT
+SERVICE CONFIGS
 Use these formats for in/output depending on the context
 - Request payload format (json): '{ "input": [1.0, ...] }'
 - Response payload format (json): '{ "prediction": [[1.0]] }'

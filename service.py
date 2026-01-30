@@ -76,8 +76,8 @@ with tab1:
 
     with left_column:        
         st.markdown("### 🧠 Define Intent")
-        intent = show_code(value="", lang="markdown", height=400, tab=0)                                
-        if st.button("Generate Descriptor", type="primary"):           
+        intent = show_code(value="", lang="markdown", height=500, tab=0)                                
+        if st.button("Generate Descriptor (BOM)", type="primary"):           
             if not intent:            
                 st.error(f"No intent provided!")
                 st.stop()
