@@ -1,0 +1,58 @@
+# EmpyHarness configuration for a single-machine demo: every workload instance runs as a local EmpyWorkload
+# child process connected to the broker below. Paths are relative to this file.
+#   EmpyBroker --config Configs/MLOps/Broker.yaml
+#   EmpyHarness run --config Configs/MLOps/HarnessLocal.yaml
+#   EmpyWorkload simulate --descriptor Configs/MLOps/HomeControl.yaml
+#   EmpyHarness intent "Deploy a home temperature controller ..." --config Configs/MLOps/HarnessLocal.yaml
+# Configs/MLOps/Broker.yaml raises the broker's request_timeout_ms to 120000 so that agent proposals
+# (timeouts.agent_ms * 3 + 5000) and HITL approvals (timeouts.hitl_ms) are not cut off by the broker.
+broker: {host: 127.0.0.1, port: 5600, client_config: ""}
+topic_root: mlops
+identity: harness
+roles: [harness, executive, placement, lifecycle, compliance]
+
+ontology: Ontology.yaml
+ontology_state: ""
+knowledge: Knowledge.yaml
+policies: Policies.yaml
+
+state_directory: ""
+knowledge_directory: ""
+
+status: {address: 127.0.0.1, port: 0}
+timeouts: {agent_ms: 30000, hitl_ms: 60000, ready_ms: 30000, liveness_ms: 15000}
+hitl: {default: reject}
+wait_for_ready: true                            # the workload processes report through retained heartbeats
+
+placement:
+  audit_seconds: 300
+  weights:
+    locality: 0.25
+    subscribers: 0.10
+    shard: 0.15
+    latency: 0.20
+    accelerator: 0.10
+    session: 0.10
+    capacity: 0.05
+    preference: 0.05
+
+comas:
+  consolidation_seconds: 60
+  mcp_command: []
+
+compliance: {violation_limit: 3, violation_window_seconds: 300}
+
+intelligence:
+  reasoning: {provider: deterministic}
+  planning: {provider: deterministic}
+  generation: {provider: deterministic}
+
+# EmpyWorkload children: executable "" = EmpyWorkload beside EmpyHarness; descriptors and logs go to
+# a private per-user directory (%LOCALAPPDATA%/EmpyMLOps/process, $XDG_STATE_HOME or ~/.local/state/EmpyMLOps/process)
+# unless directories are set
+substrate:
+  type: process
+  executable: ""
+  state_directory: ""
+  log_directory: ""
+  client_config: ""

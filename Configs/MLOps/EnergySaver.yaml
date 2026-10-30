@@ -1,0 +1,58 @@
+# A second RichML-Service that competes for the home temperature setpoint: it also declares the
+# actionable home/set/temp, with a lower priority (-1, below the default 0 of HomeControl.yaml)
+# and the "energy" objective (which the ontology marks as conflicting with performance).
+# Deploying it next to HomeControl.yaml exercises the Compliance agent's conflict resolution
+# (two services influencing the same actionable topic would oscillate).
+apiVersion: mlops/v1
+kind: RichMLService
+
+metadata:
+  name: energy-saver
+  version: "1.0.0"
+  description: Relaxes the home temperature setpoint to reduce heating and cooling energy.
+  intent: Save energy by lowering the home temperature setpoint from temperature and occupancy sensors
+
+specs:
+  observables:
+    - name: home/temp
+      unit: celsius
+    - name: home/occupancy
+      unit: count
+
+  actionables:
+    - name: home/set/temp
+      unit: celsius
+      min: 18
+      max: 22
+      maxRatePerMinute: 6
+
+  inference:
+    resources:
+      cpu: "500m"
+      memory: "512Mi"
+    endpoint: "/v1/predict"
+    regions: ["edge"]
+    latency:
+      observable: control-latency
+      path: observation-to-action
+      statistic: p95
+      windowSeconds: 60
+      maxMs: 50
+
+  training:
+    resources:
+      cpu: "1"
+      memory: "2Gi"
+    regions: ["cloud"]
+    schedule: "0 3 * * *"
+    dataset: home-energy
+    label: home/label/energy
+
+  constraints:
+    priority: -1
+    objectives: [energy]
+
+  lifecycle:
+    accuracyThreshold: 0.85
+    minImprovement: 0.02
+    cooldownSeconds: 120

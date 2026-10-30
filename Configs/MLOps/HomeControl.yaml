@@ -1,0 +1,55 @@
+# RichML-Service descriptor for closed-loop home temperature control (thesis Listing 2.1).
+# The ML Bill of Materials declares what the service consumes (observables = MMQP subscription
+# profiles), what it may act on (actionables = publication profiles with bounds), its inference
+# and training requirements, and the lifecycle policy. Extensions over the listing:
+# metadata.intent (the operator intent it was generated from) and training.label (ground truth).
+apiVersion: mlops/v1
+kind: RichMLService
+
+metadata:
+  name: home-control
+  version: "1.0.0"
+  intent: >-
+    Deploy a home temperature controller that keeps the temperature between 16 and 24 degrees
+    using temperature and humidity sensors, with a p95 latency under 5 ms, retrained daily on a GPU
+
+specs:
+  observables:
+    - name: home/temp
+      unit: celsius
+    - name: home/hum
+      unit: percent
+
+  actionables:
+    - name: home/set/temp
+      unit: celsius
+      min: 16
+      max: 24
+
+  inference:
+    resources:
+      cpu: "1"
+      memory: "1Gi"
+    endpoint: "/v1/predict"
+    regions: ["ran", "edge"]
+    latency:
+      observable: control-latency
+      path: observation-to-action
+      statistic: p95
+      windowSeconds: 60
+      maxMs: 5
+
+  training:
+    resources:
+      cpu: "2"
+      memory: "4Gi"
+      accelerator: gpu
+    regions: ["edge", "cloud"]
+    schedule: "0 0 * * *"
+    dataset: home-telemetry
+    label: home/label/temp
+
+  lifecycle:
+    accuracyThreshold: 0.90
+    minImprovement: 0.02
+    cooldownSeconds: 60

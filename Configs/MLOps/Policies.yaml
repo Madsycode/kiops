@@ -1,0 +1,38 @@
+# Governance policies applied by the Compliance agent (thesis §2.1.3) to every candidate RichML-Service before
+# deployment. Criteria: policy constraints (denied topics, action-rate ceiling), topic ownership, action
+# permissions, safety requirements (bounds envelopes), tenant isolation, plus the declared deployment intent and
+# actionable-topic conflicts with deployed services, which need no configuration. All topics are MMQP filters.
+#
+# Verdicts: any error → rejected; otherwise an unresolved conflict or intent mismatch → escalate (HITL approval
+# over MMQP request/response); otherwise automatic amendments (clamped bounds, dropped conflicting actionables,
+# limited action rates) → amended; else approved.
+
+# no service may subscribe to or act on these topics
+denied_topics:
+  - "home/set/door/#"        # physical access is never delegated to ML services
+  - "$SYS/#"
+
+# actionable topic domains and the operator team that owns them; a service declaring another owner is
+# rejected, a service declaring no owner is reported (warning)
+ownership:
+  - {filter: "home/set/#", owner: home-ops}
+
+# per-subject action permissions (subject = service name, constraints.owner, or "*" for every service);
+# a deny overlapping an actionable rejects it; when allow lists apply, every actionable must be covered
+permissions:
+  - subject: "*"
+    deny: ["home/set/alarm/#", "factory/set/emergency-stop"]
+  - subject: energy-saver
+    allow: ["home/set/temp", "home/set/heating", "home/set/light"]
+
+# safety envelopes: declared actionable bounds are clamped into the envelope (amended); bounds that cannot
+# intersect it reject the service
+safety:
+  - {filter: "home/set/temp", unit: celsius, min: 10, max: 30}
+
+# tenant isolation: a tenant service's topics must stay under its root, and no other service may reach into it
+tenants:
+  - {name: acme, root: tenants/acme}
+
+require_encryption_for_tenants: false
+max_action_rate_per_minute: 0    # 0 = no platform-wide ceiling on declared action rates

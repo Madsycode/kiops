@@ -1,0 +1,114 @@
+# CoMaS knowledge seed (thesis §2.1.4, Fig. 23): the Resource Registry, Network Knowledge, Tool/Skill
+# Registry, operator-provided context and (normally empty) agents memory that KnowledgePlane::Seed loads
+# into the collections resources, network, tools, operator and memory.
+#
+# resources:  compute nodes {id, region, cpu, memory (quantity or bytes), accelerators{gpu|npu|tpu: count},
+#             broker "host:port" of a node-local MMQP broker (optional; workload instances placed on the node
+#             connect there instead of the harness broker, and placement scores session locality by it),
+#             labels{}}
+# network:    regions[], latency{a: {b: ms}} (symmetric lookup, same region 0.5 ms), topics{filter: {region: msgs/s}} (observable
+#             telemetry density), consumers{filter: {region: subscribers}} (actionable consumers), shards{region:
+#             [owned topic filters]} (profile-shard ownership); the Placement agent's locality reports update it
+# tools:      {id, kind: tool|skill, description, capabilities[], ...}
+# operator:   {id, text, tags[]} context the agents retrieve through CoMaS
+# memory:     [{id?, agent, kind, service, data}] episodic agents memory
+
+resources:
+  # radio access network (far edge): small sites next to the base stations, closest to home telemetry
+  - id: ran-1
+    region: ran
+    cpu: 4
+    memory: 8Gi
+    accelerators: {npu: 1}
+    labels: {site: tower-a, zone: north, power: grid}
+  - id: ran-2
+    region: ran
+    cpu: 4
+    memory: 8Gi
+    labels: {site: tower-b, zone: south, power: grid}
+  # metro edge: aggregation sites with inference GPUs
+  - id: edge-1
+    region: edge
+    cpu: 16
+    memory: 32Gi
+    accelerators: {gpu: 1}
+    labels: {site: metro-east, gpu-model: l4}
+  - id: edge-2
+    region: edge
+    cpu: 32
+    memory: 64Gi
+    accelerators: {gpu: 2}
+    labels: {site: metro-west, gpu-model: l40s}
+  # central cloud: training capacity
+  - id: cloud-1
+    region: cloud
+    cpu: 64
+    memory: 256Gi
+    accelerators: {gpu: 8}
+    labels: {site: dc-frankfurt, gpu-model: h100}
+  - id: cloud-2
+    region: cloud
+    cpu: 96
+    memory: 384Gi
+    accelerators: {tpu: 4}
+    labels: {site: dc-frankfurt, tpu-version: v5e}
+
+network:
+  regions: [ran, edge, cloud]
+  latency:
+    ran: {edge: 2, cloud: 25}
+    edge: {cloud: 15}
+  topics:
+    "home/#": {ran: 40, edge: 5}
+    "factory/#": {edge: 20, cloud: 2}
+    "vehicle/#": {ran: 15, edge: 8}
+  consumers:
+    "home/set/#": {ran: 10, edge: 1}
+    "factory/set/#": {edge: 4}
+  shards:
+    ran: ["home/#"]
+    edge: ["vehicle/#"]
+    cloud: ["factory/#"]
+
+tools:
+  - id: kubectl
+    kind: tool
+    description: Applies and deletes RichML-Service manifests (ConfigMap, Deployment, RichMLService CR) on Kubernetes.
+    capabilities: [deploy, retire, render]
+    substrate: kubernetes
+  - id: empy-workload
+    kind: tool
+    description: EMPY workload runtime that serves inference, trains models and simulates IoT telemetry over MMQP.
+    capabilities: [inference, training, simulate]
+    substrate: process
+  - id: linear-trainer
+    kind: skill
+    description: Ridge-regularised least-squares regression trained from observable features and a label topic.
+    capabilities: [train, evaluate]
+  - id: drift-detector
+    kind: skill
+    description: Windowed accuracy and observation-to-action latency monitoring that publishes drift events.
+    capabilities: [drift, metrics]
+  - id: comas-mcp
+    kind: tool
+    description: Model Context Protocol server exposing the CoMaS knowledge plane (knowledge_query, knowledge_retrieve, knowledge_put, knowledge_collections).
+    capabilities: [query, retrieve, record]
+
+operator:
+  - id: site-policy
+    text: Prefer RAN placement for closed-loop home control.
+    tags: [home, placement, ran]
+  - id: comfort-band
+    text: Home temperature setpoints must stay within 16 to 24 celsius; never actuate outside this band.
+    tags: [home, safety, temperature]
+  - id: gpu-budget
+    text: Training jobs should use edge GPUs first and burst to cloud GPUs only when the edge is saturated.
+    tags: [training, accelerator, placement]
+  - id: maintenance-window
+    text: Retraining and model promotion are preferred during the nightly maintenance window (00:00-04:00 UTC).
+    tags: [lifecycle, schedule, retrain]
+  - id: escalation
+    text: Conflicts between services that drive the same actuator are escalated to the on-call operator.
+    tags: [compliance, conflict, hitl]
+
+memory: []

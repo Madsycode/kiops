@@ -1,0 +1,320 @@
+# BoM-Ontology seed (thesis Fig. 25): the vocabulary grounding the Executive agent's semantic parsing.
+# Every concept passes Ontology::Extend's consistency checks on load; the agents evolve it at runtime.
+#
+# kinds:      domain (root), quantity (unit, topic, min?, max?), actuator (quantity, topic, unit, min, max),
+#             pattern (actionable, latencyMs, statistic, suffix), objective, region, accelerator, unit,
+#             schedule (cron)
+# relations:  actuates (actuator→quantity), measuredIn (quantity|actuator→unit), contains (domain→quantity),
+#             conflictsWith (objective→objective), prefers (pattern→region)
+#
+# Terms are matched token-wise after eOps::Tokenize ("°C" → celsius, "%" → percent, "24h" → 24 h, "far-edge" →
+# far edge) with plural folding (Semantics::Normalize), longest multi-word synonym first. A term may only be
+# bound to concepts of one kind.
+revision: 0
+concepts:
+  # ---------------------------------------------------------------- units
+  - id: celsius
+    kind: unit
+    synonyms: ["celcius", "°C", "degree", "degrees", "deg", "centigrade", "degree celsius", "degrees celsius",
+               "degrees celcius", "degrees centigrade", "celsius degrees"]
+    attributes: {symbol: "°C", dimension: temperature}
+  - id: fahrenheit
+    kind: unit
+    synonyms: ["°F", "degrees fahrenheit", "degree fahrenheit"]
+    attributes: {symbol: "°F", dimension: temperature}
+  - id: percent
+    kind: unit
+    synonyms: ["%", "percentage", "pct", "per cent"]
+    attributes: {symbol: "%", dimension: ratio}
+  - id: ms
+    kind: unit
+    synonyms: ["millisecond", "milliseconds", "msec", "msecs", "millis"]
+    attributes: {symbol: "ms", dimension: time, seconds: 0.001}
+  - id: second
+    kind: unit
+    synonyms: ["seconds", "sec", "secs"]
+    attributes: {symbol: "s", dimension: time, seconds: 1}
+  - id: minute
+    kind: unit
+    synonyms: ["minutes", "min", "mins"]
+    attributes: {symbol: "min", dimension: time, seconds: 60}
+  - id: hour
+    kind: unit
+    synonyms: ["hours", "hr", "hrs"]
+    attributes: {symbol: "h", dimension: time, seconds: 3600}
+  - id: watt
+    kind: unit
+    synonyms: ["watts", "kilowatt", "kilowatts", "kw"]
+    attributes: {symbol: "W", dimension: power}
+  - id: kwh
+    kind: unit
+    synonyms: ["kilowatt hour", "kilowatt hours", "kilowatt-hour", "kilowatt-hours"]
+    attributes: {symbol: "kWh", dimension: energy}
+  - id: count
+    kind: unit
+    synonyms: ["counts"]
+    attributes: {symbol: "1", dimension: count}
+  - id: lux
+    kind: unit
+    synonyms: ["lx"]
+    attributes: {symbol: "lx", dimension: illuminance}
+  - id: ppm
+    kind: unit
+    synonyms: ["parts per million"]
+    attributes: {symbol: "ppm", dimension: concentration}
+  - id: mm-per-second
+    kind: unit
+    synonyms: ["mm/s", "millimeters per second", "millimetres per second"]
+    attributes: {symbol: "mm/s", dimension: velocity}
+  - id: km-per-hour
+    kind: unit
+    synonyms: ["km/h", "kmh", "kph", "kilometers per hour", "kilometres per hour", "km per hour"]
+    attributes: {symbol: "km/h", dimension: velocity}
+  - id: vehicles-per-minute
+    kind: unit
+    synonyms: ["vehicles per minute", "cars per minute"]
+    attributes: {symbol: "veh/min", dimension: rate}
+
+  # ---------------------------------------------------------------- quantities (observables)
+  - id: temperature
+    kind: quantity
+    synonyms: ["temp", "temperatures", "heat", "thermal", "room temperature", "indoor temperature",
+               "ambient temperature", "air temperature", "thermometer", "thermometers", "warmth"]
+    attributes: {unit: celsius, topic: temp, min: -40, max: 85}
+    relations:
+      - {type: measuredIn, target: celsius}
+  - id: humidity
+    kind: quantity
+    synonyms: ["hum", "moisture", "relative humidity", "rh", "dampness", "humid", "hygrometer", "hygrometers"]
+    attributes: {unit: percent, topic: hum, min: 0, max: 100}
+    relations:
+      - {type: measuredIn, target: percent}
+  - id: occupancy
+    kind: quantity
+    synonyms: ["presence", "occupants", "occupant", "people", "persons", "people count", "person count",
+               "headcount", "motion", "movement"]
+    attributes: {unit: count, topic: occupancy, min: 0}
+    relations:
+      - {type: measuredIn, target: count}
+  - id: power
+    kind: quantity
+    synonyms: ["electricity", "power consumption", "energy consumption", "energy usage", "energy use",
+               "electricity consumption", "electricity usage", "power usage", "power draw", "consumption",
+               "electrical load", "wattage"]
+    attributes: {unit: watt, topic: power, min: 0}
+    relations:
+      - {type: measuredIn, target: watt}
+  - id: illuminance
+    kind: quantity
+    synonyms: ["brightness", "light level", "light levels", "ambient light", "luminosity", "daylight"]
+    attributes: {unit: lux, topic: lux, min: 0}
+    relations:
+      - {type: measuredIn, target: lux}
+  - id: air-quality
+    kind: quantity
+    synonyms: ["air quality", "co2", "carbon dioxide", "iaq", "voc", "air pollution", "pollution"]
+    attributes: {unit: ppm, topic: co2, min: 0}
+    relations:
+      - {type: measuredIn, target: ppm}
+  - id: traffic
+    kind: quantity
+    synonyms: ["traffic flow", "traffic volume", "vehicle count", "congestion", "road traffic"]
+    attributes: {unit: vehicles-per-minute, topic: traffic, min: 0}
+    relations:
+      - {type: measuredIn, target: vehicles-per-minute}
+  - id: vibration
+    kind: quantity
+    synonyms: ["vibrations", "oscillation", "accelerometer", "accelerometers", "shaking", "machine vibration"]
+    attributes: {unit: mm-per-second, topic: vibration, min: 0}
+    relations:
+      - {type: measuredIn, target: mm-per-second}
+  - id: speed
+    kind: quantity
+    synonyms: ["velocity", "rate of travel", "vehicle speed", "rotational speed", "rpm"]
+    attributes: {unit: km-per-hour, topic: speed, min: 0}
+    relations:
+      - {type: measuredIn, target: km-per-hour}
+
+  # ---------------------------------------------------------------- actuators (actionables)
+  # the first actuator of a quantity is its setpoint actuator (Executive derives it for controllers)
+  - id: cooling
+    kind: actuator
+    synonyms: ["thermostat", "thermostats", "setpoint", "set point", "temperature setpoint", "temperature set point",
+               "thermostat setpoint", "air conditioning", "air conditioner", "hvac", "climate control", "cooler",
+               "chiller", "cool"]
+    attributes: {quantity: temperature, topic: set/temp, unit: celsius, min: 16, max: 24}
+    relations:
+      - {type: actuates, target: temperature}
+      - {type: measuredIn, target: celsius}
+  - id: heating
+    kind: actuator
+    synonyms: ["heater", "heaters", "radiator", "radiators", "boiler", "heat pump", "furnace", "warm up",
+               "heating valve"]
+    attributes: {quantity: temperature, topic: set/heating, unit: percent, min: 0, max: 100}
+    relations:
+      - {type: actuates, target: temperature}
+      - {type: measuredIn, target: percent}
+  - id: ventilation
+    kind: actuator
+    synonyms: ["fan", "fans", "ventilator", "air flow", "airflow", "air exchange", "dehumidifier", "exhaust fan",
+               "ventilate"]
+    attributes: {quantity: humidity, topic: set/fan, unit: percent, min: 0, max: 100}
+    relations:
+      - {type: actuates, target: humidity}
+      - {type: actuates, target: air-quality}
+      - {type: measuredIn, target: percent}
+  - id: lighting
+    kind: actuator
+    synonyms: ["light", "lights", "lamp", "lamps", "luminaire", "luminaires", "dimmer", "dimming", "light switch"]
+    attributes: {quantity: illuminance, topic: set/light, unit: percent, min: 0, max: 100}
+    relations:
+      - {type: actuates, target: illuminance}
+      - {type: measuredIn, target: percent}
+  - id: motor
+    kind: actuator
+    synonyms: ["motors", "drive", "drives", "spindle", "conveyor", "throttle", "motor drive", "servo"]
+    attributes: {quantity: speed, topic: set/motor, unit: percent, min: 0, max: 100}
+    relations:
+      - {type: actuates, target: speed}
+      - {type: measuredIn, target: percent}
+
+  # ---------------------------------------------------------------- domains (topic roots)
+  - id: home
+    kind: domain
+    synonyms: ["house", "household", "apartment", "smart home", "residential", "residence", "dwelling", "living room",
+               "bedroom", "domestic"]
+    attributes: {root: home}
+    relations:
+      - {type: contains, target: temperature}
+      - {type: contains, target: humidity}
+      - {type: contains, target: occupancy}
+      - {type: contains, target: power}
+      - {type: contains, target: illuminance}
+      - {type: contains, target: air-quality}
+  - id: factory
+    kind: domain
+    synonyms: ["plant", "manufacturing", "industrial", "industry", "production line", "assembly line", "shop floor",
+               "workshop", "smart factory"]
+    attributes: {root: factory}
+    relations:
+      - {type: contains, target: vibration}
+      - {type: contains, target: temperature}
+      - {type: contains, target: power}
+      - {type: contains, target: speed}
+  - id: vehicle
+    kind: domain
+    synonyms: ["car", "cars", "automotive", "truck", "trucks", "fleet", "connected car", "vehicular", "road",
+               "highway", "v2x"]
+    attributes: {root: vehicle}
+    relations:
+      - {type: contains, target: speed}
+      - {type: contains, target: traffic}
+      - {type: contains, target: temperature}
+  - id: building
+    kind: domain
+    synonyms: ["office", "offices", "commercial building", "campus", "facility", "smart building", "premises",
+               "floor"]
+    attributes: {root: building}
+    relations:
+      - {type: contains, target: temperature}
+      - {type: contains, target: humidity}
+      - {type: contains, target: occupancy}
+      - {type: contains, target: power}
+      - {type: contains, target: illuminance}
+      - {type: contains, target: air-quality}
+
+  # ---------------------------------------------------------------- regions
+  - id: ran
+    kind: region
+    synonyms: ["radio access", "radio access network", "far edge", "far-edge", "base station", "base stations",
+               "cell site", "cell tower", "tower", "gnb", "gnodeb", "enb", "o-ran", "open ran", "ran edge"]
+    attributes: {tier: 0}
+  - id: edge
+    kind: region
+    synonyms: ["edge node", "edge nodes", "edge server", "edge servers", "near edge", "mec", "multi-access edge",
+               "fog", "on premise", "on premises", "on-prem", "local gateway"]
+    attributes: {tier: 1}
+  - id: cloud
+    kind: region
+    synonyms: ["data center", "data centre", "datacenter", "datacentre", "central", "central cloud", "public cloud",
+               "core", "core network", "backend", "hyperscaler"]
+    attributes: {tier: 2}
+
+  # ---------------------------------------------------------------- accelerators
+  - id: gpu
+    kind: accelerator
+    synonyms: ["gpus", "graphics card", "graphics cards", "graphics processing unit", "cuda", "nvidia"]
+    attributes: {resource: nvidia.com/gpu}
+  - id: npu
+    kind: accelerator
+    synonyms: ["npus", "neural processing unit", "neural engine", "ai accelerator"]
+    attributes: {resource: empy.io/npu}
+  - id: tpu
+    kind: accelerator
+    synonyms: ["tpus", "tensor processing unit", "tensor processor"]
+    attributes: {resource: google.com/tpu}
+
+  # ---------------------------------------------------------------- objectives
+  - id: performance
+    kind: objective
+    synonyms: ["throughput", "responsiveness", "quality of service", "qos", "high performance", "fast response",
+               "low latency"]
+  - id: safety
+    kind: objective
+    synonyms: ["safe", "fail safe", "fail-safe", "protection", "hazard", "safety limit", "safety limits", "secure"]
+  - id: comfort
+    kind: objective
+    synonyms: ["comfortable", "cosy", "cozy", "convenience", "well being", "wellbeing", "pleasant"]
+  - id: energy
+    kind: objective
+    synonyms: ["energy saving", "energy savings", "save energy", "saving energy", "energy efficient",
+               "energy efficiency", "efficiency", "efficient", "economical", "eco", "cost saving", "savings",
+               "reduce consumption", "green", "sustainability"]
+    relations:
+      - {type: conflictsWith, target: performance}
+      - {type: conflictsWith, target: comfort}
+
+  # ---------------------------------------------------------------- patterns (service archetypes)
+  - id: controller
+    kind: pattern
+    synonyms: ["control", "controls", "controlling", "closed loop", "closed-loop", "regulator", "regulate",
+               "regulates", "regulation", "keep", "keeps", "maintain", "maintains", "stabilise", "stabilize",
+               "actuate", "adjust", "adjusts"]
+    attributes: {actionable: true, latencyMs: 5, statistic: p95, suffix: control}
+    relations:
+      - {type: prefers, target: ran}
+      - {type: prefers, target: edge}
+  - id: predictor
+    kind: pattern
+    synonyms: ["forecast", "forecasts", "forecaster", "forecasting", "prediction", "predictions", "predict",
+               "predicts", "estimator", "estimate", "estimation", "regression", "predictive model"]
+    attributes: {actionable: false, latencyMs: 100, statistic: p95, suffix: forecast}
+    relations:
+      - {type: prefers, target: edge}
+      - {type: prefers, target: cloud}
+  - id: detector
+    kind: pattern
+    synonyms: ["anomaly", "anomalies", "anomaly detection", "anomaly detector", "detection", "detect", "detects",
+               "fault detection", "outlier", "outliers", "monitor", "monitoring", "alarm", "alerting", "watchdog"]
+    attributes: {actionable: false, latencyMs: 50, statistic: p95, suffix: detector}
+    relations:
+      - {type: prefers, target: edge}
+
+  # ---------------------------------------------------------------- schedules (training cadence)
+  - id: daily
+    kind: schedule
+    synonyms: ["nightly", "every day", "every night", "each day", "each night", "once a day", "once per day",
+               "per day", "every 24 hours", "24h", "midnight"]
+    attributes: {cron: "0 0 * * *"}
+  - id: hourly
+    kind: schedule
+    synonyms: ["every hour", "each hour", "once an hour", "once per hour", "every 60 minutes"]
+    attributes: {cron: "0 * * * *"}
+  - id: weekly
+    kind: schedule
+    synonyms: ["every week", "each week", "once a week", "once per week", "per week", "every 7 days", "every sunday"]
+    attributes: {cron: "0 0 * * 0"}
+  - id: monthly
+    kind: schedule
+    synonyms: ["every month", "each month", "once a month", "once per month", "per month"]
+    attributes: {cron: "0 0 1 * *"}

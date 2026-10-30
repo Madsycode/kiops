@@ -1,0 +1,8 @@
+Checks: '-*,readability-identifier-naming'
+HeaderFilterRegex: '.*/EMPY_(LIB|EXE)_.*/.*'
+ExcludeHeaderFilterRegex: '.*/Vendors/.*'
+CheckOptions:
+  readability-identifier-naming.MemberCase: CamelCase
+  readability-identifier-naming.MemberPrefix: m_
+  readability-identifier-naming.MethodCase: CamelCase
+  readability-identifier-naming.MethodIgnoredRegexp: '^(now|operator.*)$'

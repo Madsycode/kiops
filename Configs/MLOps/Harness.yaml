@@ -1,0 +1,62 @@
+# EmpyHarness configuration (Agentic-MLOps harness runtime, thesis §2.1.2). Paths are relative to this file.
+#   EmpyBroker --config Configs/MLOps/Broker.yaml
+#   EmpyHarness run --config Configs/MLOps/Harness.yaml
+# Request/response exchanges are also bounded by the broker's request_timeout_ms (5000 in Configs/Broker.yaml)
+# and the client's response_timeout_ms. `run` raises the client limit to cover the timeouts below; the broker
+# profile Configs/MLOps/Broker.yaml sets request_timeout_ms: 120000, which covers agent proposals
+# (timeouts.agent_ms * 3 + 5000) and HITL approvals (timeouts.hitl_ms). Raise both together.
+# client_config: optional eMQ client YAML (TLS, auth, ...). secure_workloads: the workload MMQP sessions use TLS or
+# QUIC (default: derived from the process substrate's client_config); a descriptor declaring
+# constraints.security.encryption is refused otherwise. With the kubernetes substrate, host must be an address the
+# pods can reach (a node's own broker in Knowledge.yaml wins).
+broker: {host: 127.0.0.1, port: 5600, client_config: ""}
+topic_root: mlops
+identity: harness
+roles: [harness, executive, placement, lifecycle, compliance]
+
+# BoM ontology, CoMaS knowledge seed (resource registry, network knowledge, tools, operator context) and
+# governance policies
+ontology: Ontology.yaml
+ontology_state: ""           # evolved BoM ontology saved here, loaded in preference to `ontology` ("" = in memory)
+knowledge: Knowledge.yaml
+policies: Policies.yaml
+
+state_directory: ""          # durable harness state (journaled FileStore) when set
+knowledge_directory: ""      # durable CoMaS knowledge when set
+
+status: {address: 127.0.0.1, port: 0}          # read-only HTTP status endpoint (0 = ephemeral port)
+# liveness_ms: an instance silent this long after a heartbeat is lost (failure event → redeploy); 0 = off
+timeouts: {agent_ms: 30000, hitl_ms: 60000, ready_ms: 30000, liveness_ms: 15000}
+hitl: {default: reject}                         # decision when no operator answers in time
+wait_for_ready: false                           # deploy waits for the first heartbeat of every instance; a
+                                                # redeploy/relocation retires the old instances only once the
+                                                # new ones are ready
+
+placement:
+  audit_seconds: 300                            # periodic placement audit triggers (relocation proposals); 0 = off
+  weights:
+    locality: 0.25
+    subscribers: 0.10
+    shard: 0.15
+    latency: 0.20
+    accelerator: 0.10
+    session: 0.10
+    capacity: 0.05
+    preference: 0.05
+
+comas:
+  consolidation_seconds: 60                     # agents memory → consolidated experience
+  mcp_command: []                               # e.g. [EmpyHarness, mcp-server, --config, Knowledge.yaml]
+
+# repeated policy violations at a workload's execution boundary (rate limits excluded) → escalated retirement (HITL)
+compliance: {violation_limit: 3, violation_window_seconds: 300}
+
+# Intelligence Service Providers: deterministic = the agents' built-in ontology/rule logic. For a remote
+# model use {provider: anthropic, model: claude-opus-5-5, api_key_env: ANTHROPIC_API_KEY}.
+intelligence:
+  reasoning: {provider: deterministic}
+  planning: {provider: deterministic}
+  generation: {provider: deterministic}
+
+# execution substrate: simulated (in-memory), kubernetes (rendered manifests, optional kubectl) or process
+substrate: {type: simulated}
